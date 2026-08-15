@@ -1,0 +1,27 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "files": [
+    "src/client/api.ts",
+    "src/client/connection-controller.ts",
+    "src/client/desktop-api-client.ts",
+    "src/client/desktop-bridge.ts",
+    "src/client/index.ts",
+    "src/protocol.ts"
+  ],
+  "references": [
+    {
+      "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../host/apiproxy"
+    }
+  ]
+}

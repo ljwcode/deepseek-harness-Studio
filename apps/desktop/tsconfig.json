@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/client/connection-desktop/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/client/web"
+    },
+    {
+      "path": "../../packages/client/modules"
+    },
+    {
+      "path": "../../packages/bundle/desktop-app"
+    }
+  ]
+}
