@@ -522,6 +522,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Composes the __DSH_BOOT__ entry graph from an incremental dsh.client scan, serves plugin bundles, and notifies rebuilt/graph-changed subscribers.',
   },
   {
+    key: 'desktopRuntime',
+    pkg: 'desktop-app',
+    title: 'Desktop client graph host',
+    mode: 'core',
+    consumers: ['desktop-app'],
+    note: 'Composes the desktop boot graph from the mounted dsh.client roster and reads built client bundles for the IPC bridge.',
+  },
+  {
     key: 'workflowEngine',
     pkg: 'workflow',
     title: 'Workflow script engine',

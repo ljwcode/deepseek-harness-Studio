@@ -526,6 +526,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'desktopRuntime',
+    summary: 'Host service exposed to the desktop IPC row.',
+    description: 'Host service exposed to the desktop IPC row.',
+    methods: [
+      {
+        signature: 'graph(): DesktopBootGraph',
+        description: 'Compose the current client boot graph from active `dsh.client` loader entries.',
+        parameters: [],
+        returns: 'the graph whose `rev` covers every row and bundle hash.',
+      },
+      {
+        signature: 'readBundle(url: string): { contentType: string; code: string }',
+        description: 'Read one built client bundle (or its source map) by boot-graph URL.',
+        parameters: [{ name: 'url', description: 'a `/plugins/<id>/client.js[.map]` boot-graph URL.' }],
+        returns: 'the bundle content type and UTF-8 source text.',
+      },
+    ],
+  },
+  {
     key: 'directoryPicker',
     summary: 'Abstract directory-picking service.',
     description: 'Abstract directory-picking service. Subclass, implement `capability()`, and load the subclass as a plugin — it registers as `ctx.directoryPicker` (one implementation per context; loading a second throws, cordis\' standard duplicate-service behavior). The capability object must be stable for the service lifetime: consumers may capture it across calls.',
@@ -2920,6 +2939,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CredentialRef',
     declaration: 'export type CredentialRef = Branded<\'CredentialRef\'>;',
+  },
+  {
+    name: 'DesktopBootEntry',
+    declaration: 'export interface DesktopBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n}',
+  },
+  {
+    name: 'DesktopBootGraph',
+    declaration: 'export interface DesktopBootGraph {\n    rev: string;\n    entries: DesktopBootEntry[];\n}',
   },
   {
     name: 'DiffCallView',

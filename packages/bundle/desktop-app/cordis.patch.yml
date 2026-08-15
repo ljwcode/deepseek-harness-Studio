@@ -1,0 +1,295 @@
+# The dsh-desktop-app bundle patch: the Electron/desktop surface over the
+# dsh-base layer. It intentionally mounts no webserver, no frontend-static,
+# no web-startup, and no Web connection row: the renderer talks to the
+# api-gateway through the desktop IPC carrier instead.
+#
+# A patch replaces the targeted row's whole `config`, so each row below
+# restates every key it owns.
+
+# ── surface-specific values the base deliberately omits ─────────────────────
+
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+      The user is interacting with you through the DSH Studio desktop app. When the user
+      refers to "this app" or "the desktop", they mean DSH Studio.
+
+# The shared module-reload HMR row is Web-oriented; desktop boots from built
+# client bundles and keeps profile patch hot-reload below the IPC bridge.
+- id: hmr
+  disabled: true
+
+# Full-text session search is opt-in (the base row's `openAt: never`). This
+# restatement keeps the desktop values on one ephemeral in-memory index.
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: never
+
+- id: tools
+  config:
+    # Same temporary native/code workaround as the Web surface until session
+    # tool presentation owns the choice per session.
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+# ── desktop host rows, the IPC transport, and the client roster ─────────────
+
+# `dsh.client` rows are the roster the desktop-runtime host service scans into
+# the boot graph returned to the renderer by the bootstrap handshake.
+- insert:
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: storage
+      name: '@deepseek-ai/dsh-storage'
+
+    - id: storage-json
+      name: '@deepseek-ai/dsh-storage-json'
+      config:
+        root: !!js dshHomePath('storages')
+
+    - id: storage-domain
+      name: '@deepseek-ai/dsh-storage-domain'
+      config:
+        backend: json
+
+    - id: message-feedback
+      name: '@deepseek-ai/dsh-message-feedback'
+      config:
+        maxNoteBytes: 8192
+
+    # Desktop Session export: `/export` command plus the shared download flow.
+    - id: session-log-download
+      name: '@deepseek-ai/dsh-session-log-export'
+
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: session-projection-cache
+      name: '@deepseek-ai/dsh-session-projection-cache'
+      config:
+        writeEveryEvents: 200
+        writeIntervalMs: 5000
+
+    # Whole-log turn/step counts for the chat stats strip.
+    - id: session-stats
+      name: '@deepseek-ai/dsh-session-stats'
+
+    # The desktop shell always owns a native OS chooser; the adaptive Web
+    # chooser would require a webServer service, so both faces are pinned.
+    - id: directory-picker
+      name: '@deepseek-ai/dsh-host-directory-picker-native'
+
+    - id: directory-picker-surface
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-native'
+
+    # Read-only projection of current Loader entries for trusted client RPCs.
+    - id: plugin-inventory
+      name: '@deepseek-ai/dsh-host-plugin-inventory'
+
+    # The transport-agnostic API gateway shared by every client shape.
+    - id: api-gateway
+      name: '@deepseek-ai/dsh-host-apiproxy'
+
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
+
+    # Desktop transport: the node half provides the transport-independent
+    # logical RPC registry consumed by the IPC bridge.
+    - id: connection
+      name: '@deepseek-ai/dsh-client-connection-desktop'
+
+    # Host-side client graph composer: scans the `dsh.client` roster and reads
+    # built client bundles for the IPC bootstrap/bundle requests.
+    - id: desktop-runtime
+      name: '@deepseek-ai/dsh-desktop-app/runtime'
+
+    # Process-IPC bridge; inert unless DSH_DESKTOP_IPC=1 (Electron launch).
+    - id: desktop-ipc
+      name: '@deepseek-ai/dsh-desktop-app/ipc'
+
+    # ── desktop plugin roster (dsh.client rows) ──────────────────────────────
+
+    - id: api-remotes
+      name: '@deepseek-ai/dsh-api-remotes'
+
+    - id: client-runtime
+      name: '@deepseek-ai/dsh-client-runtime'
+
+    - id: cordis-client-runner
+      name: '@deepseek-ai/dsh-cordis-client-runner'
+
+    - id: ui-theme
+      name: '@deepseek-ai/dsh-client-ui-theme'
+
+    - id: locale
+      name: '@deepseek-ai/dsh-client-locale'
+
+    - id: ui-layout
+      name: '@deepseek-ai/dsh-client-ui-layout'
+
+    - id: ui-sidebar
+      name: '@deepseek-ai/dsh-client-ui-sidebar'
+
+    - id: ui-settings
+      name: '@deepseek-ai/dsh-client-ui-settings'
+
+    - id: ui-settings-general
+      name: '@deepseek-ai/dsh-client-ui-settings-general'
+
+    - id: ui-settings-models
+      name: '@deepseek-ai/dsh-client-ui-settings-models'
+
+    - id: ui-settings-plugin-inventory
+      name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+
+    - id: ui-conversation
+      name: '@deepseek-ai/dsh-client-ui-conversation'
+
+    # Tool call tree, generic fallback, and keyed business Tool views.
+    - id: ui-tool
+      name: '@deepseek-ai/dsh-client-ui-tool'
+
+    - id: ui-cordis
+      name: '@deepseek-ai/dsh-client-ui-cordis'
+
+    # Durable workflow lifecycle as an independent Chat node.
+    - id: ui-workflow-run
+      name: '@deepseek-ai/dsh-client-ui-workflow-run'
+
+    # Turn tail: produced files under each closing assistant message.
+    - id: ui-deliverables
+      name: '@deepseek-ai/dsh-client-ui-deliverables'
+
+    - id: ui-workspace
+      name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    # Input triggers and command surface.
+    - id: ui-input-trigger
+      name: '@deepseek-ai/dsh-client-ui-input-trigger'
+
+    - id: ui-commands
+      name: '@deepseek-ai/dsh-client-ui-commands'
+
+    - id: ui-skill
+      name: '@deepseek-ai/dsh-client-ui-skill'
+
+    - id: ui-subagent
+      name: '@deepseek-ai/dsh-client-ui-subagent'
+
+    # Background jobs list.
+    - id: ui-jobs
+      name: '@deepseek-ai/dsh-client-ui-jobs'
+
+    # Goal surface.
+    - id: ui-goal
+      name: '@deepseek-ai/dsh-client-ui-goal'
+
+    # Per-message feedback.
+    - id: ui-message-feedback
+      name: '@deepseek-ai/dsh-client-ui-message-feedback'
+
+    # Model selection.
+    - id: ui-model-selection
+      name: '@deepseek-ai/dsh-client-ui-model-selection'
+
+    - id: ui-permission
+      name: '@deepseek-ai/dsh-client-ui-permission-presets'
+
+    - id: ui-agent-preset
+      name: '@deepseek-ai/dsh-client-ui-agent-preset'
+
+    # Plugin configuration.
+    - id: ui-settings-plugins
+      name: '@deepseek-ai/dsh-client-ui-settings-plugins'
+
+    # Plan control.
+    - id: ui-plan
+      name: '@deepseek-ai/dsh-client-ui-plan'
+
+    - id: ui-user-questions
+      name: '@deepseek-ai/dsh-client-ui-user-questions'
+
+    - id: ui-trajectory
+      name: '@deepseek-ai/dsh-client-ui-trajectory'
+
+# ── the agent plane moves behind agent presets ─────────────────────────────
+# Same host-plane boundary as the Web bundle: registries stay process-wide;
+# per-agent tools and prompt sections are mounted by each session's preset.
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: tool-jobs
+  disabled: true
+
+- id: tool-fs
+  disabled: true
+
+- id: tool-fs-search
+  disabled: true
+
+- id: tool-str-replace-editor
+  disabled: true
+
+- id: skill-filesystem
+  disabled: true
+
+- id: tool-skill
+  disabled: true
+
+- id: tool-goal
+  disabled: true
+
+- id: plan-mode
+  disabled: true
+
+- id: compaction-basic
+  disabled: true
+
+- id: command-compact
+  disabled: true
+
+- id: tool-result-pruner
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+- id: workflow-worker-thread
+  disabled: true
+
+- id: tool-workflow
+  disabled: true
+
+- id: tool-ralph
+  disabled: true
+
+- id: agent-instructions
+  disabled: true
+
+- id: tool-todo
+  disabled: true
+
+- id: tool-web
+  disabled: true
+
+# The preset roster (shipped root is patched in by apps/cli profile boot).
+- insert:
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
