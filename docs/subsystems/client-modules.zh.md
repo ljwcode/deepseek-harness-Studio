@@ -115,4 +115,27 @@ onGraphChanged(listener: () => void): () => void
 ```
 
 Source: [`packages/client/modules/src/index.ts:184`](../../packages/client/modules/src/index.ts)
+
+<a id="ctxdesktopruntime--desktopruntimehandle"></a>
+
+### `ctx.desktopRuntime` — `DesktopRuntimeHandle`
+
+Host service exposed to the desktop IPC row.
+
+```ts cordis-catalog
+/**
+ * Compose the current client boot graph from active `dsh.client` loader entries.
+ * @returns the graph whose `rev` covers every row and bundle hash.
+ */
+graph(): DesktopBootGraph
+
+/**
+ * Read one built client bundle (or its source map) by boot-graph URL.
+ * @param url - a `/plugins/<id>/client.js[.map]` boot-graph URL.
+ * @returns the bundle content type and UTF-8 source text.
+ */
+readBundle(url: string): { contentType: string; code: string }
+```
+
+Source: [`packages/bundle/desktop-app/src/runtime.ts:46`](../../packages/bundle/desktop-app/src/runtime.ts)
 <!-- END GENERATED cordis-surface -->
