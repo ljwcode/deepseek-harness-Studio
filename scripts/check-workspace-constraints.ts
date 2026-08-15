@@ -61,6 +61,7 @@ const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   // The Web build emits sourcemaps for browser debugging; publishing them is
   // what the payload policy forbids, so the bundle ships without them.
   '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map'],
+  '@deepseek-ai/dsh-desktop': ['dist', '!dist/**/*.map'],
 }
 
 /** The subset of package.json fields this constraint check cares about. */
@@ -148,6 +149,11 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // unpublished, as everywhere else in the repository.
   '@deepseek-ai/dsh-client-ui-primitives': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
+  // The desktop profile bundle and its IPC carrier publish their glue bundles
+  // beside the lib; the dsh.bundle.patch layer comes from the manifest
+  // declaration, so profile bundles need no extra entry for it.
+  '@deepseek-ai/dsh-desktop-app': ['lib/runtime.js', 'lib/ipc.js'],
+  '@deepseek-ai/dsh-client-connection-desktop': ['lib/protocol.js'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-code-runtime-python': ['py/**/*.py'],
