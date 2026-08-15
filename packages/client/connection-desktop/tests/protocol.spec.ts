@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DesktopTransportError,
   parseDesktopChildEnvelope,
+  parseDesktopChildRequest,
   parseDesktopHostRequest,
+  parseDesktopRequestFrame,
   type DesktopIpcEventEnvelope,
 } from '@deepseek-ai/dsh-client-connection-desktop/protocol'
 
@@ -47,5 +50,39 @@ describe('desktop IPC protocol', () => {
     }
     const parsed = parseDesktopChildEnvelope(envelope)
     expect(parsed).toEqual({ ok: true, value: envelope })
+  })
+
+  it('accepts parent-only shutdown but never exposes it to renderer parsing', () => {
+    expect(parseDesktopChildRequest({ kind: 'shutdown' })).toEqual({ ok: true, value: { kind: 'shutdown' } })
+    expect(parseDesktopHostRequest({ kind: 'shutdown' }).ok).toBe(false)
+  })
+
+  it('validates renderer frames and their host generation', () => {
+    const frame = {
+      protocolVersion: 1,
+      rendererId: crypto.randomUUID(),
+      hostGeneration: 7,
+      message: { kind: 'ping' },
+    }
+    expect(parseDesktopRequestFrame(frame)).toEqual({ ok: true, value: frame })
+    expect(parseDesktopRequestFrame({ ...frame, protocolVersion: 2 }).ok).toBe(false)
+    expect(parseDesktopRequestFrame({ ...frame, rendererId: '' }).ok).toBe(false)
+    expect(parseDesktopRequestFrame({ ...frame, hostGeneration: -1 }).ok).toBe(false)
+    expect(parseDesktopRequestFrame({ ...frame, message: { kind: 'shutdown' } }).ok).toBe(false)
+  })
+
+  it('requires the main-assigned generation on host readiness envelopes', () => {
+    expect(parseDesktopChildEnvelope({ kind: 'ready', pid: 42, profile: 'desktop', generation: 3 })).toEqual({
+      ok: true,
+      value: { kind: 'ready', pid: 42, profile: 'desktop', generation: 3 },
+    })
+    expect(parseDesktopChildEnvelope({ kind: 'ready', pid: 42, profile: 'desktop' }).ok).toBe(false)
+  })
+
+  it('keeps transport error codes machine-readable and distinct from host errors', () => {
+    const error = new DesktopTransportError('host-unavailable', 'child exited', new Error('spawn failed'))
+    expect(error.name).toBe('DesktopTransportError')
+    expect(error.code).toBe('host-unavailable')
+    expect(error.cause).toBeInstanceOf(Error)
   })
 })
