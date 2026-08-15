@@ -1,0 +1,7 @@
+# Phase 1B desktop runtime test overlay. This patch is never installed into
+# the production desktop profile; it adds deterministic tools exercised by
+# apps/desktop/tests/runtime/*.e2e.spec.ts over the real desktop IPC carrier.
+
+- insert:
+    - id: desktop-runtime-fixture
+      name: '@deepseek-ai/dsh-desktop-runtime-fixture'

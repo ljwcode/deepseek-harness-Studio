@@ -261,6 +261,7 @@
     { "path": "./packages/typert/generator" },
     { "path": "./packages/test-support/acp-snapshot" },
     { "path": "./packages/test-support/loader-smoke" },
+    { "path": "./packages/test-support/desktop-runtime-fixture" },
     { "path": "./packages/test-support/llm-mock-server" },
     { "path": "./packages/subagent/subagent" },
     { "path": "./packages/subagent/tool-subagent" },
