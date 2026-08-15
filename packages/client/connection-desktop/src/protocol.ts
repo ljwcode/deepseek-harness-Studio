@@ -7,6 +7,37 @@
  * @module @deepseek-ai/dsh-client-connection-desktop/protocol
  */
 
+/** Stable desktop transport protocol version carried by every renderer frame. */
+export const DESKTOP_PROTOCOL_VERSION = 1 as const
+
+/** Machine-readable desktop physical transport failure category. */
+export type DesktopTransportErrorCode =
+  | 'host-unavailable'
+  | 'host-restarting'
+  | 'request-aborted'
+  | 'request-timeout'
+  | 'transport-closed'
+  | 'protocol-error'
+
+/**
+ * Desktop physical transport error, distinct from a Harness `RpcResult`
+ * business error. The former means the carrier could not complete delivery;
+ * the latter means the Host answered and the logical request failed.
+ */
+export class DesktopTransportError extends Error {
+  override readonly cause?: unknown
+
+  constructor(
+    readonly code: DesktopTransportErrorCode,
+    message: string,
+    cause?: unknown,
+  ) {
+    super(message)
+    this.name = 'DesktopTransportError'
+    if (cause !== undefined) this.cause = cause
+  }
+}
+
 /** One client entry in the desktop boot graph (same wire shape as the Web graph). */
 export interface DesktopBootEntry {
   id: string
@@ -37,6 +68,11 @@ export type DesktopHostRequest =
   | { kind: 'fetch'; fetchId: string; url: string; init: DesktopFetchInit }
   | { kind: 'fetch-abort'; fetchId: string }
 
+/** Parent-to-child control request; `shutdown` is never accepted from a renderer. */
+export type DesktopChildRequest =
+  | DesktopHostRequest
+  | { kind: 'shutdown' }
+
 /** Fetch readiness payload returned once the host has response headers. */
 export interface DesktopFetchReady {
   status: number
@@ -50,6 +86,28 @@ export interface DesktopFetchReady {
 export interface DesktopBundlePayload {
   contentType: string
   code: string
+}
+
+/** Bootstrap value handed back to the renderer, augmented by Electron main. */
+export interface DesktopBootstrap {
+  protocolVersion: typeof DESKTOP_PROTOCOL_VERSION
+  hostGeneration: number
+  graph: DesktopBootGraph
+  host: unknown
+  pid: number
+  harnessVersion: string
+}
+
+/**
+ * Renderer -> Electron-main desktop envelope. `message` is a desktop carrier
+ * request; the DSH RPC wire message stays nested inside `fetch.init.body`,
+ * never flattened into the Harness wire contract.
+ */
+export interface DesktopRequestFrame {
+  protocolVersion: typeof DESKTOP_PROTOCOL_VERSION
+  rendererId: string
+  hostGeneration: number
+  message: DesktopHostRequest
 }
 
 /** Host->renderer streaming events for one open fetch. Chunk data is base64
@@ -70,7 +128,7 @@ export interface DesktopIpcError {
 export interface DesktopIpcRequestEnvelope {
   kind: 'request'
   requestId: string
-  message: DesktopHostRequest
+  message: DesktopChildRequest
 }
 
 /** Main/child response correlation envelope. */
@@ -94,6 +152,8 @@ export interface DesktopIpcReadyEnvelope {
   kind: 'ready'
   pid: number
   profile: 'desktop'
+  /** Main-assigned host generation, echoed for stale-ready fencing. */
+  generation: number
 }
 
 /** Messages the Harness child process emits on its IPC channel. */
@@ -186,6 +246,39 @@ export function parseDesktopHostRequest(value: unknown): { ok: true; value: Desk
 }
 
 /**
+ * Validate a parent-to-child request. The renderer vocabulary is delegated to
+ * {@link parseDesktopHostRequest}; the parent-only `shutdown` control request
+ * is accepted here and never by the renderer-facing parser.
+ */
+export function parseDesktopChildRequest(value: unknown): { ok: true; value: DesktopChildRequest } | { ok: false; error: string } {
+  if (isRecord(value) && value.kind === 'shutdown') return { ok: true, value: { kind: 'shutdown' } }
+  return parseDesktopHostRequest(value)
+}
+
+/**
+ * Validate the renderer -> main desktop envelope.
+ * @param value - raw `dsh:request` frame received from preload.
+ * @returns the typed frame, or a diagnostic for an unknown/malformed frame.
+ */
+export function parseDesktopRequestFrame(value: unknown): { ok: true; value: DesktopRequestFrame } | { ok: false; error: string } {
+  if (!isRecord(value)) return { ok: false, error: 'desktop request frame must be an object' }
+  if (value.protocolVersion !== DESKTOP_PROTOCOL_VERSION) {
+    return { ok: false, error: `desktop protocolVersion must be ${DESKTOP_PROTOCOL_VERSION}` }
+  }
+  const rendererId = stringField(value, 'rendererId')
+  if (rendererId === undefined || rendererId.length === 0 || rendererId.length > 256) {
+    return { ok: false, error: 'desktop request frame requires a non-empty rendererId' }
+  }
+  const hostGeneration = value.hostGeneration
+  if (typeof hostGeneration !== 'number' || !Number.isSafeInteger(hostGeneration) || hostGeneration < 0) {
+    return { ok: false, error: 'desktop request frame requires a non-negative integer hostGeneration' }
+  }
+  const message = parseDesktopHostRequest(value.message)
+  if (!message.ok) return { ok: false, error: `desktop request frame: ${message.error}` }
+  return { ok: true, value: { protocolVersion: DESKTOP_PROTOCOL_VERSION, rendererId, hostGeneration, message: message.value } }
+}
+
+/**
  * Validate a host-child envelope in Electron main.
  * @param value - raw child-process IPC message.
  * @returns the typed envelope, or a diagnostic for an unknown/malformed message.
@@ -197,10 +290,11 @@ export function parseDesktopChildEnvelope(value: unknown): { ok: true; value: De
   if (kind === 'ready') {
     const pid = value.pid
     const profile = stringField(value, 'profile')
-    if (typeof pid === 'number' && profile === 'desktop') {
-      return { ok: true, value: { kind: 'ready', pid, profile: 'desktop' } }
+    const generation = value.generation
+    if (typeof pid === 'number' && profile === 'desktop' && typeof generation === 'number' && Number.isSafeInteger(generation)) {
+      return { ok: true, value: { kind: 'ready', pid, profile: 'desktop', generation } }
     }
-    return { ok: false, error: 'ready envelope requires numeric pid and desktop profile' }
+    return { ok: false, error: 'ready envelope requires numeric pid, desktop profile, and host generation' }
   }
   const requestId = stringField(value, 'requestId')
   if (requestId === undefined) return { ok: false, error: 'child envelope requires requestId' }

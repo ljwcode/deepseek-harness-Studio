@@ -1,6 +1,7 @@
 
 /** BrowserWindow ownership: one window, recreate after a renderer crash. */
 
+import { EventEmitter } from 'node:events'
 import { BrowserWindow, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -14,13 +15,15 @@ export interface WindowManagerOptions {
   showOnReady?: boolean
 }
 
-export class WindowManager {
+export class WindowManager extends EventEmitter {
   private window: BrowserWindow | undefined
   private readonly preloadPath: string
   private readonly rendererEntry: string
   private readonly showOnReady: boolean
+  private readonly disposedWebContents = new Set<number>()
 
   constructor(options: WindowManagerOptions = {}) {
+    super()
     this.preloadPath = options.preloadPath ?? join(MAIN_DIR, '../preload/index.cjs')
     this.rendererEntry = options.rendererEntry ?? join(MAIN_DIR, '../renderer/index.html')
     this.showOnReady = options.showOnReady ?? true
@@ -33,7 +36,7 @@ export class WindowManager {
   create(): BrowserWindow {
     const existing = this.window
     if (existing !== undefined && !existing.isDestroyed()) return existing
-    this.window = new BrowserWindow({
+    const window = new BrowserWindow({
       width: 1440,
       height: 920,
       minWidth: 960,
@@ -47,25 +50,38 @@ export class WindowManager {
         sandbox: true,
       },
     })
-    this.window.on('ready-to-show', () => {
-      if (this.showOnReady) this.window?.show()
+    this.window = window
+    window.on('ready-to-show', () => {
+      if (this.showOnReady) window.show()
     })
-    this.window.on('closed', () => {
-      this.window = undefined
+    window.on('closed', () => {
+      if (this.window === window) this.window = undefined
+      this.disposeRenderer(window.webContents.id)
     })
-    this.window.webContents.on('render-process-gone', (_event, details) => {
+    window.webContents.on('destroyed', () => {
+      this.disposeRenderer(window.webContents.id)
+    })
+    window.webContents.on('render-process-gone', (_event, details) => {
       // A renderer crash must never take the Harness process down.
       console.error(`[desktop] renderer process gone: ${details.reason}`)
+      this.disposeRenderer(window.webContents.id)
     })
-    this.window.webContents.on('console-message', (_event, _level, message) => {
+    window.webContents.on('console-message', (_event, _level, message) => {
       console.log(`[renderer] ${message}`)
     })
-    this.window.webContents.setWindowOpenHandler(({ url }) => {
+    window.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url)
       return { action: 'deny' }
     })
-    void this.window.loadFile(this.rendererEntry)
-    return this.window
+    void window.loadFile(this.rendererEntry)
+    return window
+  }
+
+  /** Emit one `renderer-disposed` event per webContents lifetime. */
+  private disposeRenderer(webContentsId: number): void {
+    if (this.disposedWebContents.has(webContentsId)) return
+    this.disposedWebContents.add(webContentsId)
+    this.emit('renderer-disposed', webContentsId)
   }
 
   broadcast(channel: string, payload: unknown): void {
