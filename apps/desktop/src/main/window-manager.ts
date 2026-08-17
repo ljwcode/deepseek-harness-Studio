@@ -51,25 +51,31 @@ export class WindowManager extends EventEmitter {
       },
     })
     this.window = window
+    // Capture webContents identity while it is alive. `closed` and
+    // `render-process-gone` can fire after the webContents object is already
+    // destroyed; accessing `window.webContents` in those callbacks throws
+    // "Object has been destroyed" and can crash the main process during quit.
+    const webContents = window.webContents
+    const webContentsId = webContents.id
     window.on('ready-to-show', () => {
       if (this.showOnReady) window.show()
     })
     window.on('closed', () => {
       if (this.window === window) this.window = undefined
-      this.disposeRenderer(window.webContents.id)
+      this.disposeRenderer(webContentsId)
     })
-    window.webContents.on('destroyed', () => {
-      this.disposeRenderer(window.webContents.id)
+    webContents.on('destroyed', () => {
+      this.disposeRenderer(webContentsId)
     })
-    window.webContents.on('render-process-gone', (_event, details) => {
+    webContents.on('render-process-gone', (_event, details) => {
       // A renderer crash must never take the Harness process down.
       console.error(`[desktop] renderer process gone: ${details.reason}`)
-      this.disposeRenderer(window.webContents.id)
+      this.disposeRenderer(webContentsId)
     })
-    window.webContents.on('console-message', (_event, _level, message) => {
+    webContents.on('console-message', (_event, _level, message) => {
       console.log(`[renderer] ${message}`)
     })
-    window.webContents.setWindowOpenHandler(({ url }) => {
+    webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url)
       return { action: 'deny' }
     })
