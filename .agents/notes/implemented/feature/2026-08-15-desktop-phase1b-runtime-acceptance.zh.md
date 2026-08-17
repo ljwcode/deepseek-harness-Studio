@@ -21,12 +21,12 @@ Phase 1B 在不新增产品 UI 的前提下，让桌面载波具备生命周期�
 - `DesktopApiClient` 将“等待响应头”的 Promise 纳入 stream 状态，使 abort 与 `close()` 能让尚未收到响应头的请求收敛，而不是悬挂。
 - `@deepseek-ai/dsh-desktop-runtime-fixture` 提供 `fixture_echo`、`fixture_wait`、`fixture_approval`、`fixture_question`、`fixture_job` 与 `fixture_fail`，只通过 `apps/desktop/tests/fixtures/desktop-test.patch.yml` 挂载。
 - Runtime E2E 使用真实 mock LLM HTTP/SSE 服务、真实 DeepSeek adapter 与真实 Agent Loop，经原始桌面 IPC 验证：prompt 流式输出、多步工具、审批稳定 rpcId 重放、提问校验权威、stall/cancel、队列保留、冷持久化、SIGKILL 崩溃恢复、goal 写入/投影/清除、job 快照流与 subagent 目录基线。
-- Electron smoke 通过 Playwright `_electron` 启动构建产物，重载 renderer 后获得新 rendererId 而 Harness generation/pid 不变，流式完成一次真实 prompt，并在 Harness 子进程 SIGKILL 后验证会话重新同步。
+- Electron smoke 通过 Playwright `_electron` 启动构建产物：启动与 renderer 重载保持 Harness generation/pid 不变；可见 composer 中的真实 prompt 经 UI 流式完成；重载与 Harness 子进程 SIGKILL 后都恢复同一会话。壳把 singleton/userData 放在 `DSH_STUDIO_HOME` 下，`WindowManager` 在 teardown 前捕获 webContents id，退出路径不再触碰已销毁的 `webContents` 对象。
 - Core Agent Loop 在 `keepInbox` 取消时，若 inbox 已有未决工作则设置 latch，使 live turn 期间入队的任务在取消收敛后自动续跑；其他 live-driver 语义保持不变。
 
 ## 验证
 
-`pnpm run test:desktop` 运行 27 个传输/生命周期测试与 12 个 Runtime E2E 测试；`pnpm run test:desktop:electron` 再增加 2 个 Electron smoke（启动/重载与 prompt/重载/SIGKILL 恢复）。`packages/core/agent-loop/tests` 保持绿色（329 个测试），包括更新后的取消测试套件。`@deepseek-ai/dsh-desktop` typecheck、desktop build 与聚焦 oxlint 通过。
+`pnpm run test:desktop` 运行 27 个传输/生命周期测试与 12 个 Runtime E2E 测试；`pnpm run test:desktop:electron` 再增加 3 个 Electron smoke（启动/重载、原始 prompt/重载/SIGKILL 恢复与可见 composer UI-click 恢复）。`packages/core/agent-loop/tests` 保持绿色（329 个测试），包括更新后的取消测试套件。`@deepseek-ai/dsh-desktop` typecheck、desktop build 与聚焦 oxlint 通过。
 
 ## 备选方案
 

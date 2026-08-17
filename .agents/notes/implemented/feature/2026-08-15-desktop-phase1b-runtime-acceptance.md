@@ -21,12 +21,12 @@ Phase 1B makes the desktop carrier lifecycle-safe and testable without adding pr
 - `DesktopApiClient` registers the bridge-readiness promise in its stream state, so aborts and `close()` settle requests that have not received headers instead of hanging.
 - `@deepseek-ai/dsh-desktop-runtime-fixture` adds `fixture_echo`, `fixture_wait`, `fixture_approval`, `fixture_question`, `fixture_job`, and `fixture_fail`, mounted only through `apps/desktop/tests/fixtures/desktop-test.patch.yml`.
 - Runtime E2E uses the real mock LLM HTTP/SSE server, the real DeepSeek adapter, and the real agent loop over raw desktop IPC: prompt streaming, multi-step tool, approval replay with stable rpcId, question validation authority, stall/cancel, queue preservation, cold persistence, SIGKILL crash recovery, goal write/projection/clear, job snapshot streaming, and subagent catalog baseline.
-- Electron smoke launches the built app through Playwright `_electron`, reloads the renderer with a new rendererId while keeping the Harness generation and pid stable, streams a real prompt, and verifies session resync after a Harness child SIGKILL.
+- Electron smoke launches the built app through Playwright `_electron`: boot and renderer reload keep the Harness generation and pid stable; a visible-composer prompt streams through the real UI; reload and Harness child SIGKILL both restore the same conversation. The shell keeps its singleton/userData under `DSH_STUDIO_HOME`, and `WindowManager` captures the webContents id before teardown so quit paths cannot touch a destroyed `webContents` object.
 - Core agent loop now latches `keepInbox` cancellation when pending work exists at cancel time, so queued work that arrived during a live turn resumes automatically after the cancelled turn converges. Other live-driver semantics are unchanged.
 
 ## Verification
 
-`pnpm run test:desktop` runs 27 transport/lifecycle tests and 12 runtime E2E tests; `pnpm run test:desktop:electron` adds 2 Electron smoke tests (boot/reload and prompt/reload/SIGKILL recovery). `packages/core/agent-loop/tests` stays green (329 tests), including the updated cancellation suite. `@deepseek-ai/dsh-desktop` typecheck, desktop build, and focused oxlint pass.
+`pnpm run test:desktop` runs 27 transport/lifecycle tests and 12 runtime E2E tests; `pnpm run test:desktop:electron` adds 3 Electron smoke tests (boot/reload, raw prompt/reload/SIGKILL recovery, and visible-composer UI-click recovery). `packages/core/agent-loop/tests` stays green (329 tests), including the updated cancellation suite. `@deepseek-ai/dsh-desktop` typecheck, desktop build, and focused oxlint pass.
 
 ## Alternatives considered
 
