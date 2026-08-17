@@ -19,13 +19,14 @@ Phase 1B makes the desktop carrier lifecycle-safe and testable without adding pr
 - `HarnessProcessManager` now uses a monotonic host generation fence, explicit `desired` running/stopped state, a 500ms→10s restart ladder, a 5-crash/60s crash-loop gate, a unified `IpcRequestRegistry`, and a `desktop/shutdown` graceful protocol (dispose Cordis tree, release IPC, exit) before SIGTERM/SIGKILL.
 - Renderer frames carry `protocolVersion`, a preload-boot `rendererId`, and the main-owned `hostGeneration`; Electron main rejects stale generations and aborts renderer-owned requests/streams when a webContents is disposed or reloads.
 - `DesktopApiClient` registers the bridge-readiness promise in its stream state, so aborts and `close()` settle requests that have not received headers instead of hanging.
-- `@deepseek-ai/dsh-desktop-runtime-fixture` adds `fixture_echo`, `fixture_wait`, `fixture_approval`, `fixture_question`, and `fixture_fail`, mounted only through `apps/desktop/tests/fixtures/desktop-test.patch.yml`.
-- Runtime E2E uses the real mock LLM HTTP/SSE server, the real DeepSeek adapter, and the real agent loop over raw desktop IPC: prompt streaming, multi-step tool, approval replay with stable rpcId, question validation authority, stall/cancel, queue preservation, cold persistence, and SIGKILL crash recovery.
+- `@deepseek-ai/dsh-desktop-runtime-fixture` adds `fixture_echo`, `fixture_wait`, `fixture_approval`, `fixture_question`, `fixture_job`, and `fixture_fail`, mounted only through `apps/desktop/tests/fixtures/desktop-test.patch.yml`.
+- Runtime E2E uses the real mock LLM HTTP/SSE server, the real DeepSeek adapter, and the real agent loop over raw desktop IPC: prompt streaming, multi-step tool, approval replay with stable rpcId, question validation authority, stall/cancel, queue preservation, cold persistence, SIGKILL crash recovery, goal write/projection/clear, job snapshot streaming, and subagent catalog baseline.
+- Electron smoke launches the built app through Playwright `_electron`, reloads the renderer with a new rendererId while keeping the Harness generation and pid stable, streams a real prompt, and verifies session resync after a Harness child SIGKILL.
 - Core agent loop now latches `keepInbox` cancellation when pending work exists at cancel time, so queued work that arrived during a live turn resumes automatically after the cancelled turn converges. Other live-driver semantics are unchanged.
 
 ## Verification
 
-`pnpm run test:desktop` runs 27 transport/lifecycle tests and 9 runtime E2E tests. `packages/core/agent-loop/tests` stays green (329 tests), including the updated cancellation suite. `@deepseek-ai/dsh-desktop` typecheck and focused oxlint pass.
+`pnpm run test:desktop` runs 27 transport/lifecycle tests and 12 runtime E2E tests; `pnpm run test:desktop:electron` adds 2 Electron smoke tests (boot/reload and prompt/reload/SIGKILL recovery). `packages/core/agent-loop/tests` stays green (329 tests), including the updated cancellation suite. `@deepseek-ai/dsh-desktop` typecheck, desktop build, and focused oxlint pass.
 
 ## Alternatives considered
 
@@ -33,7 +34,7 @@ Phase 1B makes the desktop carrier lifecycle-safe and testable without adding pr
 
 **Leave queued-after-cancel work parked until another wake.** Rejected because desktop prompt B must complete after cancel A without a product-layer wake hack; the core primitive is the correct authority.
 
-**Drive E2E with Electron/Playwright for every runtime case.** Rejected for the PR-blocking slice: raw desktop IPC over the real Harness process is faster and more deterministic. Electron GUI E2E remains a later gate.
+**Drive E2E with Electron/Playwright for every runtime case.** Rejected: the deterministic matrix stays on raw desktop IPC; Electron is reserved for shell-specific invariants (boot, renderer reload, real Harness child SIGKILL recovery) and now runs as a small PR-blocking smoke suite.
 
 ## Consequences
 

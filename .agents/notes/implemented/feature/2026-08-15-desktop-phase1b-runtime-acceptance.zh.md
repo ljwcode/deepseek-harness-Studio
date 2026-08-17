@@ -19,13 +19,14 @@ Phase 1B 在不新增产品 UI 的前提下，让桌面载波具备生命周期�
 - `HarnessProcessManager` 引入单调 host generation 围栏、显式 `desired` running/stopped 状态、500ms→10s 重启阶梯、5 次/60 秒崩溃环熔断、统一的 `IpcRequestRegistry`，以及先 `desktop/shutdown`（释放 Cordis 树、断开 IPC、退出）再 SIGTERM/SIGKILL 的优雅关停协议。
 - 渲染进程 frame 携带 `protocolVersion`、preload 启动时生成的 `rendererId` 与主进程持有的 `hostGeneration`；Electron main 拒绝过期 generation，并在 webContents 销毁或重载时中止该 renderer 拥有的请求与流。
 - `DesktopApiClient` 将“等待响应头”的 Promise 纳入 stream 状态，使 abort 与 `close()` 能让尚未收到响应头的请求收敛，而不是悬挂。
-- `@deepseek-ai/dsh-desktop-runtime-fixture` 提供 `fixture_echo`、`fixture_wait`、`fixture_approval`、`fixture_question` 与 `fixture_fail`，只通过 `apps/desktop/tests/fixtures/desktop-test.patch.yml` 挂载。
-- Runtime E2E 使用真实 mock LLM HTTP/SSE 服务、真实 DeepSeek adapter 与真实 Agent Loop，经原始桌面 IPC 验证：prompt 流式输出、多步工具、审批稳定 rpcId 重放、提问校验权威、stall/cancel、队列保留、冷持久化与 SIGKILL 崩溃恢复。
+- `@deepseek-ai/dsh-desktop-runtime-fixture` 提供 `fixture_echo`、`fixture_wait`、`fixture_approval`、`fixture_question`、`fixture_job` 与 `fixture_fail`，只通过 `apps/desktop/tests/fixtures/desktop-test.patch.yml` 挂载。
+- Runtime E2E 使用真实 mock LLM HTTP/SSE 服务、真实 DeepSeek adapter 与真实 Agent Loop，经原始桌面 IPC 验证：prompt 流式输出、多步工具、审批稳定 rpcId 重放、提问校验权威、stall/cancel、队列保留、冷持久化、SIGKILL 崩溃恢复、goal 写入/投影/清除、job 快照流与 subagent 目录基线。
+- Electron smoke 通过 Playwright `_electron` 启动构建产物，重载 renderer 后获得新 rendererId 而 Harness generation/pid 不变，流式完成一次真实 prompt，并在 Harness 子进程 SIGKILL 后验证会话重新同步。
 - Core Agent Loop 在 `keepInbox` 取消时，若 inbox 已有未决工作则设置 latch，使 live turn 期间入队的任务在取消收敛后自动续跑；其他 live-driver 语义保持不变。
 
 ## 验证
 
-`pnpm run test:desktop` 运行 27 个传输/生命周期测试与 9 个 Runtime E2E 测试；`packages/core/agent-loop/tests` 保持绿色（329 个测试），包括更新后的取消测试套件。`@deepseek-ai/dsh-desktop` typecheck 与聚焦 oxlint 通过。
+`pnpm run test:desktop` 运行 27 个传输/生命周期测试与 12 个 Runtime E2E 测试；`pnpm run test:desktop:electron` 再增加 2 个 Electron smoke（启动/重载与 prompt/重载/SIGKILL 恢复）。`packages/core/agent-loop/tests` 保持绿色（329 个测试），包括更新后的取消测试套件。`@deepseek-ai/dsh-desktop` typecheck、desktop build 与聚焦 oxlint 通过。
 
 ## 备选方案
 
@@ -33,7 +34,7 @@ Phase 1B 在不新增产品 UI 的前提下，让桌面载波具备生命周期�
 
 **让排队任务在取消后继续停放，等待额外唤醒。** 否决：桌面 prompt B 必须在取消 A 后自动完成，不应依赖产品层唤醒 hack；core 原语才是正确权威。
 
-**每个运行时场景都跑 Electron/Playwright。** PR 阻塞切片中否决：真实 Harness 进程上的原始桌面 IPC 更快、更确定；Electron GUI E2E 留作后续门禁。
+**每个运行时场景都跑 Electron/Playwright。** 否决：确定性矩阵仍留在原始桌面 IPC；Electron 只负责壳特有不变量（启动、renderer 重载、真实 Harness 子进程 SIGKILL 恢复），并作为小型 PR 阻塞 smoke 运行。
 
 ## 后果
 

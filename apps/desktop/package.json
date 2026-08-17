@@ -22,8 +22,8 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/ipc-request-registry.spec.ts tests/harness-process.spec.ts tests/harness-process.lifecycle.spec.ts tests/desktop-ipc.integration.spec.ts",
     "test:runtime": "vitest run tests/runtime",
-    "test:electron": "echo 'Electron GUI E2E is intentionally deferred'",
-    "check": "pnpm run typecheck && pnpm run test:unit && pnpm run test:runtime && pnpm run build"
+    "test:electron": "pnpm run build && cd ../.. && pnpm exec vitest run apps/desktop/tests/electron",
+    "check": "pnpm run typecheck && pnpm run test:unit && pnpm run test:runtime && pnpm run test:electron && pnpm run build"
   },
   "files": [
     "dist",
@@ -38,11 +38,12 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-client-modules": "workspace:^",
+    "@deepseek-ai/dsh-client-schema-form": "workspace:^",
     "@deepseek-ai/dsh-client-ui-attachment": "workspace:^",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-client-web-react": "workspace:^",
-    "@deepseek-ai/dsh-client-schema-form": "workspace:^",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.0.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
