@@ -5,6 +5,7 @@
  */
 
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { join } from 'node:path'
 import {
   DESKTOP_PROTOCOL_VERSION,
   DesktopTransportError,
@@ -14,6 +15,7 @@ import {
   type DesktopRequestFrame,
 } from '@deepseek-ai/dsh-client-connection-desktop/protocol'
 import { HarnessProcessManager, type HarnessState } from './harness-process.ts'
+import { resolveStudioHome } from './studio-home.ts'
 import { WindowManager } from './window-manager.ts'
 
 let harness: HarnessProcessManager | undefined
@@ -167,6 +169,10 @@ function boot(): void {
   windows.create()
   manager.start()
 }
+
+// The singleton lock and Chromium user-data directory belong to the Studio
+// product home, so parallel isolated E2E launches do not collide.
+app.setPath('userData', join(resolveStudioHome(process.env), 'electron-user-data'))
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
