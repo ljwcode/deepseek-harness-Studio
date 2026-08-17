@@ -17,7 +17,7 @@ interface FixtureQuestionService {
 }
 
 export const name = 'desktop-runtime-fixture'
-export const inject = ['tools', 'approval', 'userQuestions']
+export const inject = ['tools', 'approval', 'userQuestions', 'jobs']
 
 export function apply(ctx: Context): void {
   ctx.effect(() => {
@@ -147,6 +147,75 @@ export function apply(ctx: Context): void {
           }
           const answer = await service.ask({ questions: [question], agent: exec.agent, signal: exec.signal })
           return { answers: answer.answers }
+        },
+      })),
+      ctx.tools.register(defineTool({
+        name: 'fixture_job',
+        description: 'Deterministic test tool: register a short-lived background job and return its job id.',
+        parameters: {
+          label: { type: 'string', required: true, description: 'Job label.' },
+          ms: { type: 'integer', required: true, description: 'Job duration in milliseconds.' },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              jobId: { type: 'string', required: true },
+            },
+          },
+          render: (_args, value) => [{ type: 'text', text: `job: ${String((value as { jobId: unknown }).jobId)}` }],
+        },
+        async execute(args, exec) {
+          await Promise.resolve()
+          const jobs = (ctx as unknown as {
+            jobs?: {
+              start(spec: {
+                kind: string
+                label: string
+                owner?: unknown
+                run(): unknown
+              }): string
+            }
+          }).jobs
+          if (jobs === undefined || exec.agent === undefined) {
+            throw new Error('fixture_job requires ctx.jobs and an agent execution')
+          }
+          const jobId = jobs.start({
+            kind: 'fixture',
+            label: args.label,
+            owner: exec.agent,
+            run() {
+              let settled = false
+              let finish = (_outcome: { status: 'completed' | 'killed' | 'failed'; output?: string }): void => {}
+              let output = ''
+              const done = new Promise<{ status: 'completed' | 'killed' | 'failed'; output?: string }>((resolve) => {
+                finish = resolve
+              })
+              const timer = setTimeout(() => {
+                if (settled) return
+                settled = true
+                output = `${args.label} completed`
+                finish({ status: 'completed', output })
+              }, args.ms)
+              return {
+                cancel() {
+                  if (settled) return
+                  settled = true
+                  clearTimeout(timer)
+                  output = `${args.label} cancelled`
+                  finish({ status: 'killed', output })
+                },
+                done,
+                readOutput() {
+                  const current = output
+                  output = ''
+                  return current
+                },
+              }
+            },
+          })
+          return { jobId }
         },
       })),
       ctx.tools.register(defineTool({
