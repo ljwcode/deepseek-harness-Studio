@@ -101,13 +101,10 @@
       "@deepseek-ai/dsh-agent/invariant": ["./packages/core/agent/src/invariant.ts"],
       "@deepseek-ai/dsh-scope/invariant": ["./packages/core/scope/src/invariant.ts"],
       "@deepseek-ai/dsh-agent-loop/invariant": ["./packages/core/agent-loop/src/invariant.ts"],
-<<<<<<< HEAD
       "@deepseek-ai/dsh-experimental-agent-team/invariant": ["./packages/experimental/agent-team/src/invariant.ts"],
       "@deepseek-ai/dsh-experimental-tool-agent-team/invariant": ["./packages/experimental/tool-agent-team/src/invariant.ts"],
-=======
       "@deepseek-ai/dsh-desktop-app": ["./packages/bundle/desktop-app/src"],
       "@deepseek-ai/dsh-desktop-app/*": ["./packages/bundle/desktop-app/src/*"],
->>>>>>> 08b1bba791 (feat(desktop): add Phase 0/1 desktop shell and IPC carrier)
       "@deepseek-ai/dsh-*/invariant": [
         "./packages/core/*/src/invariant.ts",
         "./packages/prompt/*/src/invariant.ts",

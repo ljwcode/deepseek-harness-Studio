@@ -135,6 +135,11 @@ export class ReactLoopAgent implements Agent {
     if (!options.keepInbox) {
       this.inbox.clear()
       if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+    } else if (this.phase.kind !== 'idle' && this.inbox.hasPending) {
+      // A queued wake that arrived while this live driver was running cannot
+      // be claimed until the current turn stops; keepInbox cancellation must
+      // replay it after convergence instead of parking it until another wake.
+      this.phase.wakeRequested = true
     }
     if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
   }

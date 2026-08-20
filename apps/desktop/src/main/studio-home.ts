@@ -7,7 +7,7 @@ import { join } from 'node:path'
 const ENV_HOME = 'DSH_STUDIO_HOME'
 
 /** Resolve the DSH Studio product home, honoring the explicit override. */
-function resolveStudioHome(env: NodeJS.ProcessEnv = process.env): string {
+export function resolveStudioHome(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env[ENV_HOME]
   if (explicit !== undefined && explicit.trim() !== '') return explicit
   const home = homedir()

@@ -11,13 +11,14 @@ import type { RpcResult, RpcId, ClientRequest } from '@deepseek-ai/dsh-host-apip
 import { RpcId as mintRpcId, serverResponseSchema } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { AbstractApiClient } from './api.ts'
 import type { DesktopBridge } from './desktop-bridge.ts'
-import type { DesktopFetchReady, DesktopIpcEvent } from '../protocol.ts'
+import { DesktopTransportError, type DesktopFetchReady, type DesktopIpcEvent } from '../protocol.ts'
 
 const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
 const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
 interface StreamState {
   controller: ReadableStreamDefaultController<Uint8Array> | undefined
+  readyReject: ((error: Error) => void) | undefined
   readonly queue: Uint8Array[]
   error: Error | undefined
   closed: boolean
@@ -69,11 +70,11 @@ export class DesktopApiClient extends AbstractApiClient {
   /** Release the bridge subscription (host-app teardown, not used by the plugin fiber). */
   close(): void {
     this.unsubscribe()
-    for (const [fetchId, state] of this.streams) {
-      void fetchId
-      const error = new Error('desktop connection closed')
+    const error = new DesktopTransportError('transport-closed', 'desktop connection closed')
+    for (const state of this.streams.values()) {
       state.error = error
       state.closed = true
+      state.readyReject?.(error)
       state.controller?.error(error)
     }
     this.streams.clear()
@@ -115,7 +116,7 @@ export class DesktopApiClient extends AbstractApiClient {
 
   protected doFetch(input: URL, init?: RequestInit): Promise<Response> {
     const fetchId = crypto.randomUUID()
-    const state: StreamState = { controller: undefined, queue: [], error: undefined, closed: false }
+    const state: StreamState = { controller: undefined, readyReject: undefined, queue: [], error: undefined, closed: false }
     this.streams.set(fetchId, state)
     const signal = init?.signal ?? undefined
     const activeSignal = signal ?? new AbortController().signal
@@ -124,6 +125,7 @@ export class DesktopApiClient extends AbstractApiClient {
       if (state.closed) return
       state.closed = true
       state.error = error
+      state.readyReject?.(error)
       if (state.controller === undefined) return
       state.controller.error(error)
     }
@@ -158,14 +160,26 @@ export class DesktopApiClient extends AbstractApiClient {
     const method = init?.method ?? 'GET'
     const requestBody = typeof init?.body === 'string' ? init.body : undefined
 
-    return this.bridge.request({
-      kind: 'fetch',
-      fetchId,
-      url: normalizeTransportUrl(input),
-      init: { method, headers, ...requestBody === undefined ? {} : { body: requestBody } },
+    return new Promise<unknown>((resolveReady, rejectReady) => {
+      state.readyReject = rejectReady
+      void this.bridge.request({
+        kind: 'fetch',
+        fetchId,
+        url: normalizeTransportUrl(input),
+        init: { method, headers, ...requestBody === undefined ? {} : { body: requestBody } },
+      }).then(
+        (value) => {
+          state.readyReject = undefined
+          resolveReady(value)
+        },
+        (error: unknown) => {
+          state.readyReject = undefined
+          rejectReady(error instanceof Error ? error : new Error(String(error)))
+        },
+      )
     }).then((value) => {
       if (!isFetchReady(value)) {
-        const error = new Error('desktop connection: invalid fetch readiness payload from preload bridge')
+        const error = new DesktopTransportError('protocol-error', 'desktop connection: invalid fetch readiness payload from preload bridge')
         fail(error)
         throw error
       }

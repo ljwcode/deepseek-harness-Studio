@@ -100,14 +100,14 @@ describe('Agent.cancel()', () => {
     expect(adapter.requests).toHaveLength(1)
   })
 
-  it('cancel({ keepInbox: true }) parks queued work after an active turn aborts', async () => {
+  it('cancel({ keepInbox: true }) resumes queued work after an active turn aborts', async () => {
     const adapter = new MockAdapter([
       'hang',
       textResponse('preserved reply'),
       textResponse('wake reply'),
     ])
     const ctx = await harness(adapter)
-    const agent = ctx.agentLoop.create(SessionId('keep-after-abort'), { provider: 'mock', model: 'mock' })
+    const agent = ctx.agentLoop.create(SessionId('resume-after-abort'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'active')
     await new Promise(resolve => setTimeout(resolve, 30))
@@ -115,9 +115,11 @@ describe('Agent.cancel()', () => {
     agent.cancel({ kind: 'user' }, { keepInbox: true })
     await agent.whenIdle()
 
-    expect(userTexts(agent)).toEqual(['active'])
-    expect(agent.inbox.nextTurn).toHaveLength(1)
-    expect(adapter.requests).toHaveLength(1)
+    // A queued wake that arrived while the driver was live is latched and
+    // resumed automatically after the cancelled activity converges.
+    expect(userTexts(agent)).toEqual(['active', 'preserved'])
+    expect(agent.inbox.nextTurn).toHaveLength(0)
+    expect(adapter.requests).toHaveLength(2)
 
     const idle = waitForIdle(ctx, agent)
     send(agent, 'wake it')

@@ -14,7 +14,7 @@ import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 import {
   ipcError,
-  parseDesktopHostRequest,
+  parseDesktopChildRequest,
   type DesktopFetchReady,
   type DesktopIpcError,
   type DesktopIpcEventEnvelope,
@@ -29,6 +29,12 @@ export const inject = ['apiProxy', 'desktopRuntime', 'loader']
 
 /** The env marker set by the Electron Harness process manager. */
 const DESKTOP_IPC_ENV = 'DSH_DESKTOP_IPC'
+const HOST_GENERATION_ENV = 'DSH_DESKTOP_HOST_GENERATION'
+
+function hostGeneration(): number {
+  const value = Number(process.env[HOST_GENERATION_ENV])
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0
+}
 
 interface DesktopTransport {
   fetch(request: Request, fallback: { fetch: typeof fetch }): Promise<Response>
@@ -144,13 +150,36 @@ export function apply(ctx: Context): void {
   process.on('message', (raw: unknown) => {
     if (typeof raw !== 'object' || raw === null || (raw as { kind?: unknown }).kind !== 'request') return
     const envelope = raw as DesktopIpcRequestEnvelope
-    const parsed = parseDesktopHostRequest(envelope.message)
+    const parsed = parseDesktopChildRequest(envelope.message)
     if (!parsed.ok) {
       send(response(envelope.requestId, false, undefined, { code: 'bad-request', message: parsed.error }))
       return
     }
     const request = parsed.value
     switch (request.kind) {
+      case 'shutdown': {
+        // Acknowledge first, then unwind the whole Cordis tree. Persistence
+        // and transport rows are ordinary effects and flush on disposal.
+        send(response(envelope.requestId, true, { shuttingDown: true }))
+        const disconnect = (): void => {
+          if (typeof process.disconnect !== 'function') return
+          try {
+            process.disconnect()
+          } catch (_alreadyDisconnected) {
+            // The parent may already be gone; process exit owns teardown.
+          }
+          // The root's top-level boot await is intentionally interrupted by
+          // shutdown; exit after the IPC handle is released so Node does not
+          // report that unsettled await as a process warning.
+          setImmediate(() => { process.exit(process.exitCode ?? 0) })
+        }
+        void ctx.root.fiber.dispose().then(disconnect, (error: unknown) => {
+          console.error('[desktop-ipc] shutdown disposal failed:', error)
+          process.exitCode = 1
+          disconnect()
+        })
+        return
+      }
       case 'bootstrap': {
         answer(envelope.requestId, async () => {
           const described = await ctx.apiProxy.host.describe({ rpcId: RpcId(randomUUID()), payload: {} })
@@ -159,6 +188,7 @@ export function apply(ctx: Context): void {
               graph: runtime.graph(),
               host: described.result,
               pid: process.pid,
+              harnessVersion: described.result.ok ? described.result.value.version : 'unknown',
             },
           }
         })
@@ -184,7 +214,7 @@ export function apply(ctx: Context): void {
   // Readiness is published only after the full profile tree settled, so main
   // never hands the renderer a half-mounted desktop runtime.
   void ctx.loader.await().then(
-    () => { send({ kind: 'ready', pid: process.pid, profile: 'desktop' }) },
+    () => { send({ kind: 'ready', pid: process.pid, profile: 'desktop', generation: hostGeneration() }) },
     (error: unknown) => { send(response('boot', false, undefined, ipcError('loader-failed', error))) },
   )
 }

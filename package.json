@@ -146,7 +146,12 @@
     "demo:acp": "node --import tsx packages/examples/acp-demo/src/bin.ts --config examples/acp-agent/cordis.yml",
     "mock:llm": "node --import tsx packages/test-support/llm-mock-server/src/bin.ts",
     "dev:web": "tsx scripts/dev-web.ts --poll",
-    "postinstall": "node scripts/install-lefthook.mjs"
+    "postinstall": "node scripts/install-lefthook.mjs",
+    "test:desktop": "pnpm run test:desktop:unit && pnpm run test:desktop:runtime",
+    "test:desktop:unit": "pnpm exec vitest run packages/client/connection-desktop/tests apps/desktop/tests/ipc-request-registry.spec.ts apps/desktop/tests/harness-process.spec.ts apps/desktop/tests/harness-process.lifecycle.spec.ts apps/desktop/tests/desktop-ipc.integration.spec.ts",
+    "test:desktop:runtime": "pnpm --filter @deepseek-ai/dsh-desktop-runtime-fixture run build && pnpm exec vitest run apps/desktop/tests/runtime",
+    "test:desktop:electron": "pnpm --filter @deepseek-ai/dsh-desktop run test:electron",
+    "check:desktop": "pnpm run build:desktop && pnpm --filter @deepseek-ai/dsh-desktop run typecheck && pnpm run test:desktop:unit && pnpm run test:desktop:runtime && pnpm run test:desktop:electron && pnpm exec tsx scripts/run-oxlint.ts apps/desktop packages/client/connection-desktop packages/test-support/desktop-runtime-fixture"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "0.25.1",

@@ -6,7 +6,45 @@
  */
 
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
+import { apply as modulesApply, createClientModuleSystem } from '@deepseek-ai/dsh-client-modules/client'
+import type {
+  ClientBundleRegistration, ClientModuleCreateOptions, ClientModuleLoaderTarget,
+  ClientModuleSystem, DshWindow,
+} from '@deepseek-ai/dsh-client-modules/client'
 import type { DesktopBootGraph } from '@deepseek-ai/dsh-client-connection-desktop/protocol'
+
+/** Bootstrap package whose client bundle supplies the module-system implementation. */
+const CLIENT_MODULES_ID = '@deepseek-ai/dsh-client-modules'
+
+/**
+ * Install the `window.__ModuleLoader__` registration facade. The desktop
+ * renderer compiles the modules client face directly (no parser-preloaded
+ * classic scripts), so `create` materializes the bootstrap module from the
+ * direct import instead of draining a preloaded bundle registration.
+ * @returns the installed facade; an existing one is reused.
+ */
+function installModuleLoader(): ClientModuleLoaderTarget {
+  const win = globalThis as DshWindow
+  const existing = win.__ModuleLoader__
+  if (existing !== undefined) return existing
+  const pendingQueue: ClientBundleRegistration[] = []
+  const target: ClientModuleLoaderTarget = {
+    mode: 'queue',
+    pendingQueue,
+    load(registration) { pendingQueue.push(registration) },
+    create(options: ClientModuleCreateOptions): ClientModuleSystem {
+      if (target.mode !== 'queue') {
+        throw new Error('client-modules: window.__ModuleLoader__.create called after module-system boot')
+      }
+      return createClientModuleSystem(target, {
+        id: CLIENT_MODULES_ID,
+        exports: { createClientModuleSystem, apply: modulesApply },
+      }, options)
+    },
+  }
+  win.__ModuleLoader__ = target
+  return target
+}
 
 interface BootstrapPayload {
   graph: DesktopBootGraph
@@ -88,6 +126,7 @@ async function main(): Promise<void> {
   try {
     const payload = await bootstrap()
     ;(window as typeof window & { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = payload.graph
+    installModuleLoader()
     const entry = new AppWebEntry(el, { loadBundle: loadDesktopBundle })
     await entry.run()
     console.log('[renderer] DSH Studio boot settled')
