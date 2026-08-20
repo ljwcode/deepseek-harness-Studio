@@ -111,6 +111,15 @@
 
     # ── desktop plugin roster (dsh.client rows) ──────────────────────────────
 
+    # The module table: its client half is materialized by the renderer's
+    # __ModuleLoader__ facade and provides the `modules` service the runner
+    # rows inject; the row keeps it in the graph so the browser half activates.
+    - id: modules
+      name: '@deepseek-ai/dsh-client-modules'
+
+    - id: ui-renderer
+      name: '@deepseek-ai/dsh-client-ui-renderer'
+
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'
 

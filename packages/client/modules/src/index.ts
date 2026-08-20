@@ -293,7 +293,7 @@ window.__ModuleLoader__={
  * boot activation audit reports it).
  */
 export class ClientModuleRegistry extends Service {
-  static inject = ['webServer', 'loader']
+  static inject = ['loader']
 
   private readonly table = new Map<string, WebPluginRecord>()
   // Negative verdicts (unresolvable specifier — builtins like cordis:include,
@@ -349,14 +349,22 @@ export class ClientModuleRegistry extends Service {
       throw new ClientPackageCompositionError(failures)
     }
 
-    ctx.effect(
-      () => ctx.webServer.register({ kind: 'prefix', path: '/plugins', handler: this.serveBundle }),
-      'client-modules: bundle route',
-    )
-    ctx.effect(
-      () => ctx.webServer.tapIndex(html => injectBootManifest(html, this.composed)),
-      'client-modules: boot manifest injection',
-    )
+    // The bundle route and boot-manifest tap serve the Web surface through a
+    // webserver. The desktop surface composes the graph and serves bundles
+    // through desktop-runtime over IPC with no webserver mounted, so both
+    // effects are no-ops there — the entry still activates so the desktop
+    // graph scan keeps its client row.
+    const webServer = ctx.get('webServer')
+    if (webServer) {
+      ctx.effect(
+        () => webServer.register({ kind: 'prefix', path: '/plugins', handler: this.serveBundle }),
+        'client-modules: bundle route',
+      )
+      ctx.effect(
+        () => webServer.tapIndex(html => injectBootManifest(html, this.composed)),
+        'client-modules: boot manifest injection',
+      )
+    }
   }
 
   /**
