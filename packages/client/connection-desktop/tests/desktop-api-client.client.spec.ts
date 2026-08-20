@@ -30,7 +30,7 @@ function describePayload(rpcId: string): string {
     rpcId,
     result: {
       ok: true,
-      value: { version: 'desktop-test', cwd: '/tmp/dsh-desktop', attachedSessions: 0, canOpenPath: false },
+      value: { version: 'desktop-test', cwd: '/tmp/dsh-desktop', attachedSessions: 0, home: '/tmp/dsh-desktop', canOpenPath: false },
     },
   })
 }
